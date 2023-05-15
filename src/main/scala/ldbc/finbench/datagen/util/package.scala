@@ -1,9 +1,11 @@
 package ldbc.finbench.datagen
 
 import java.util.function.IntFunction
-
 import com.google.common.base.CaseFormat
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.spark.sql.SparkSession
 
+import java.net.URI
 import scala.reflect.ClassTag
 
 package object util {
@@ -18,4 +20,10 @@ package object util {
   def camelToUpper(str: String) = CaseFormat.LOWER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, str)
 
   def lower(str: String) = str.toLowerCase
+
+  def fileExists(path: String)(implicit spark: SparkSession) = {
+    val hadoopPath = new Path(path)
+    val fs = FileSystem.get(URI.create(path), spark.sparkContext.hadoopConfiguration)
+    fs.exists(hadoopPath)
+  }
 }

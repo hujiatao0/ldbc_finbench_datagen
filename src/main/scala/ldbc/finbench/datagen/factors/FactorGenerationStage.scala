@@ -1,15 +1,16 @@
 package ldbc.finbench.datagen.factors
 
-import ldbc.finbench.datagen.util.DatagenStage
-import org.slf4j.{Logger, LoggerFactory}
+import ldbc.finbench.datagen.io.graphs.GraphSource
+import ldbc.finbench.datagen.util.{DatagenStage, Logging}
+import ldbc.finbench.datagen.model
+import ldbc.finbench.datagen.model.EntityType
+import org.apache.spark.sql.DataFrame
 import scopt.OptionParser
 import shapeless.lens
 
 import scala.util.matching.Regex
 
-object FactorGenerationStage extends DatagenStage {
-
-  @transient lazy val log: Logger = LoggerFactory.getLogger(this.getClass)
+object FactorGenerationStage extends DatagenStage with Logging{
 
   case class Args(
       outputDir: String = "out",
@@ -20,11 +21,6 @@ object FactorGenerationStage extends DatagenStage {
   )
 
   override type ArgsType = Args
-
-  /**
-    * execute the data generation process
-    */
-  override def run(args: Args): Unit = {}
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser[Args](getClass.getName.dropRight(1)) {
@@ -62,4 +58,33 @@ object FactorGenerationStage extends DatagenStage {
 
     run(parsedArgs)
   }
+
+  // execute the Factor generation process
+  override def run(args: Args): Unit = {
+    import ldbc.finbench.datagen.io.Reader.ops._
+    import ldbc.finbench.datagen.io.instances._
+
+    GraphSource(model.graphs.Raw.graphDef, args.outputDir, args.irFormat)
+
+  }
+
+  trait FactorTrait extends (Seq[DataFrame] => DataFrame) {
+    def requiredEntities: Seq[EntityType]
+  }
+
+  case class Factor(override val requiredEntities: EntityType*)(f: Seq[DataFrame] => DataFrame) extends FactorTrait {
+    override def apply(v1: Seq[DataFrame]) = f(v1).coalesce(1)
+  }
+
+  case class LargeFactor(override val requiredEntities: EntityType*)(f: Seq[DataFrame] => DataFrame) extends FactorTrait {
+    override def apply(v1: Seq[DataFrame]) = f(v1)
+  }
+
+  import ldbc.finbench.datagen.model.raw._
+
+//  private val rawFactors = Map(
+//    "AccountTransferAccountOut1Hops" -> Factor(AccountType, TransferType) { case Seq(accounts, transfers) =>
+//
+//    }
+//  )
 }

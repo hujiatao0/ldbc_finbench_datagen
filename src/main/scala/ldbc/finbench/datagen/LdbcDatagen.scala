@@ -158,8 +158,6 @@ object LdbcDatagen extends SparkApp {
 //    }
 //
 //
-//
-//    Dictionaries.loadDictionaries()
 //    val transformArgs = TransformationStage.Args(
 //      outputDir = args.outputDir,
 //      explodeEdges = args.explodeEdges,
@@ -167,16 +165,12 @@ object LdbcDatagen extends SparkApp {
 //      keepImplicitDeletes = args.keepImplicitDeletes,
 //      simulationStart = Dictionaries.dates.getSimulationStart,
 //      simulationEnd = Dictionaries.dates.getSimulationEnd,
-//      mode = args.mode match {
-//        case "raw"         => Mode.Raw
-//        case "bi"          => Mode.BI
-//        case "interactive" => Mode.Interactive
-//      },
-//      irFormat,
+//      mode = Mode.Raw,
+//      irFormat = args.format,
 //      format = args.format,
 //      formatOptions = args.formatOptions,
 //      epochMillis = args.epochMillis
 //    )
 //    TransformationStage.run(transformArgs)
-  }
+//  }
 }

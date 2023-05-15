@@ -12,4 +12,10 @@ public class GeneralTest {
         assert config.size() > 0;
     }
 
+    @Test
+    public void testScaleFactor() {
+        Map<String, String> stringStringMap = ConfigParser.scaleFactorConf("0.1");
+        System.out.println(stringStringMap);
+    }
+
 }

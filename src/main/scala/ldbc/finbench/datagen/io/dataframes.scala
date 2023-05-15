@@ -1,10 +1,8 @@
 package ldbc.finbench.datagen.io
 
-import java.net.URI
-
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import ldbc.finbench.datagen.util.fileExists
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 
 object dataframes {
 
@@ -26,11 +24,7 @@ object dataframes {
         .load(self.path)
     }
 
-    override def exists(self: DataFrameSource): Boolean = {
-      val hadoopPath = new Path(self.path)
-      val fs         = FileSystem.get(URI.create(self.path), spark.sparkContext.hadoopConfiguration)
-      fs.exists(hadoopPath)
-    }
+    override def exists(self: DataFrameSource): Boolean = fileExists(self.path)
   }
 
   trait ReaderInstances {

@@ -1,11 +1,12 @@
 package ldbc.finbench.datagen
 
-import ldbc.finbench.datagen.io.graphs
 import ldbc.finbench.datagen.util.pascalToCamel
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.{Column, DataFrame, Encoder}
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Column, DataFrame, Encoder}
 import shapeless._
+
+import scala.language.higherKinds
 
 package object model {
   type Id[A] = A
@@ -25,7 +26,7 @@ package object model {
   }
 
   object EntityTraits {
-    def apply[A: EntityTraits] = implicitly[EntityTraits[A]]
+    def apply[A: EntityTraits]: EntityTraits[A] = implicitly[EntityTraits[A]]
 
     def pure[A: Encoder](`type`: EntityType, sizeFactor: Double): EntityTraits[A] = {
       val _type       = `type`
@@ -46,18 +47,14 @@ package object model {
 
   object EntityType {
 
-    /**
-      * define Node class
-      */
+    // define Node class
     final case class Node(name: String) extends EntityType {
       override val entityPath: String      = s"$name"
       override val primaryKey: Seq[String] = Seq("id")
       override def toString: String        = s"$name"
     }
 
-    /**
-      * define Edge class
-      */
+    // define Edge class
     final case class Edge(`type`: String,
                           source: Node,
                           destination: Node,
@@ -78,9 +75,7 @@ package object model {
       override def toString: String = s"${sourceName} - [s${`type`}] -> ${destinationName}"
     }
 
-    /**
-      * define Attr class
-      */
+    // define Attr class
     final case class Attr(`type`: String, parent: Node, attribute: String) extends EntityType {
 
       override val entityPath: String = s"${parent.name}_${pascalToCamel(`type`)}_${attribute}"
@@ -92,6 +87,28 @@ package object model {
       }.map(name => s"${name}Id")
 
       override def toString: String = s"${parent.name} ♢-[${`type`}] -> $attribute"
+    }
+  }
+
+  trait UntypedEntities[T] { def value: Map[EntityType, StructType]}
+
+  object UntypedEntities {
+    implicit def apply[T: UntypedEntities]: UntypedEntities[T] = implicitly[UntypedEntities[T]]
+  }
+
+  trait UntypedEntitiesInstances {
+
+    implicit def untypedEntitiesForHCons[T, Rest <: Coproduct](implicit et: EntityTraits[T], ev: UntypedEntities[Rest]): UntypedEntities[T :+: Rest] =
+      new UntypedEntities[T :+: Rest] {
+        override val value: Map[EntityType, StructType] = ev.value + (et.`type` -> et.schema)
+      }
+
+    implicit val untypedEntitiesForHNil: UntypedEntities[CNil] = new UntypedEntities[CNil] {
+      override def value: Map[EntityType, StructType] = Map.empty
+    }
+
+    implicit def untypedEntitiesForEnum[T, G](implicit gen: Generic.Aux[T, G], ev: UntypedEntities[G]): UntypedEntities[T] = new UntypedEntities[T] {
+      override val value = ev.value
     }
   }
 
@@ -110,9 +127,7 @@ package object model {
 
   object Mode {
 
-    /**
-      * Raw mode
-      */
+    // Raw mode
     final case object Raw extends Mode {
       type layout = DataFrame
       override val modePath: String = "raw"
@@ -131,36 +146,19 @@ package object model {
       def datePattern     = "yyyy-MM-dd"
     }
 
-    final case object Interactive extends Mode {
-      type Layout = DataFrame
-      override val modePath: String = "interactive"
-    }
-
-    final case object BI extends Mode {
-      type Layout = DataFrame
-      override val modePath: String = "bi"
-    }
-  }
-
-  trait GraphLike[+M <: Mode] {
-    def isAttrExploded: Boolean
-    def isEdgesExploded: Boolean
-    def mode: M
   }
 
   case class Graph[+M <: Mode](
-      isAttrExploded: Boolean,
-      isEdgesExploded: Boolean,
-      mode: M,
+      definition: GraphDef[M],
       entities: Map[EntityType, M#Layout]
-  ) extends GraphLike[M]
+  )
 
-  case class GraphDef[M <: Mode](
+  case class GraphDef[+M <: Mode](
       isAttrExploded: Boolean,
       isEdgesExploded: Boolean,
       mode: M,
       entities: Map[EntityType, Option[String]]
-  ) extends GraphLike[M]
+  )
 
   sealed trait BatchPeriod
 
@@ -168,5 +166,7 @@ package object model {
     case object Day   extends BatchPeriod
     case object Month extends BatchPeriod
   }
+
+  object instances extends UntypedEntitiesInstances
 
 }

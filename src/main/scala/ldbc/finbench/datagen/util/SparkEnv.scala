@@ -14,5 +14,5 @@ class SparkEnv(implicit spark: SparkSession) {
       .orElse(spark.conf.getOption(s"spark.ldbc.finbench.datagen.$key"))
   }
 
-  val irFormat = env("irFormat").getOrElse("parquet")
+  val irFormat: String = env("irFormat").getOrElse("parquet")
 }
