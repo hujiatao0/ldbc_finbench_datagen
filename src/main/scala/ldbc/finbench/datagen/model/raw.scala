@@ -68,13 +68,6 @@ object raw {
       createTime: Long
   ) extends RawEntity
 
-  // define WorkIn relationship
-  case class WorkInRaw(
-      `personId`: Long,
-      `companyId`: Long,
-      createTime: Long
-  ) extends RawEntity
-
   // define PersonInvestCompany relationship
   case class PersonInvestCompanyRaw(
       investorId: Long,
@@ -215,7 +208,7 @@ object raw {
     implicit val entityTraitsForSignIn: EntityTraits[SignInRaw] = pure(SignInType, 1.0)
     implicit val entityTraitsForTransfer: EntityTraits[TransferRaw] = pure(TransferType, 1.0)
     implicit val entityTraitsForWithdraw: EntityTraits[WithdrawRaw] = pure(WithdrawType, 1.0)
-    implicit val entityTraitsWorkIn: EntityTraits[WorkInRaw] = pure(WorkInType, 1.0)
+//    implicit val entityTraitsWorkIn: EntityTraits[WorkInRaw] = pure(WorkInType, 1.0)
   }
 
   object instances extends EntityTraitsInstances

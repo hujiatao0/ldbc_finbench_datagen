@@ -90,7 +90,7 @@ package object model {
     }
   }
 
-  trait UntypedEntities[T] { def value: Map[EntityType, StructType]}
+  trait UntypedEntities[T] { def value: Map[EntityType, StructType] }
 
   object UntypedEntities {
     implicit def apply[T: UntypedEntities]: UntypedEntities[T] = implicitly[UntypedEntities[T]]

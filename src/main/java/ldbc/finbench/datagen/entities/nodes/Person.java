@@ -64,14 +64,6 @@ public class Person implements Serializable {
         this.personName = personName;
     }
 
-    public WorkIn getWorkIn() {
-        return workIn;
-    }
-
-    public void setWorkIn(WorkIn workIn) {
-        this.workIn = workIn;
-    }
-
     public List<PersonOwnAccount> getPersonOwnAccounts() {
         return personOwnAccounts;
     }
