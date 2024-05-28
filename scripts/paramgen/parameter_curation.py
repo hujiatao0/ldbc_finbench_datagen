@@ -137,7 +137,7 @@ def get_next_sum_table(neighbors_df, basic_sum_df):
     # return pd.DataFrame(result_data)
     
     neighbors_exploded = neighbors_df.explode('account_list')
-    merged_df = neighbors_exploded.merge(basic_sum_df, left_on='account_list', right_index=True, how='left')
+    merged_df = neighbors_exploded.merge(basic_sum_df, left_on='account_list', right_index=True, how='left').drop(columns=['account_list'])
     result_df = merged_df.groupby('loan_id').sum().astype(int)
 
     return result_df
@@ -197,7 +197,7 @@ def main():
             # print(neighbors_df)
             # print(next_amount_bucket)
             # print(next_time_bucket)
-            print(loan_array)
+            # print(loan_array)
             
         else:
             loan_neighbors_df = get_next_neighbor_list(loan_neighbors_df, account_account_df, account_amount_df, amount_bucket_df)

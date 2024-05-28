@@ -119,6 +119,44 @@ object FactorGenerationStage extends DatagenStage {
       F.concat(lit("["), F.concat_ws(",", $"transfer_out_list"), lit("]"))
     )
 
+    val transferInRDD = transferRDD.select($"toId", $"fromId")
+
+    val transferInLRDD = transferInRDD.groupBy($"toId")
+      .agg(F.collect_list($"fromId").alias("transfer_in_list"))
+      .select($"toId".alias("account_id"), $"transfer_in_list")
+      .sort($"account_id")
+
+    val transferInListRDD = transferInLRDD.withColumn(
+      "transfer_in_list",
+      F.concat(lit("["), F.concat_ws(",", $"transfer_in_list"), lit("]"))
+    )
+
+    val transferInTimeRDD = transferRDD.select(col("toId"), col("createTime"))
+
+    val transferInByMonthRDD = transferInTimeRDD
+      .withColumn("year_month", date_format((col("createTime") / 1000).cast("timestamp"), "yyyy-MM"))
+      .groupBy("toId", "year_month")
+      .count()
+
+    val transferInPivotRDD = transferInByMonthRDD.groupBy("toId")
+      .pivot("year_month")
+      .agg(first("count"))
+      .na.fill(0)
+      .withColumnRenamed("toId", "account_id")
+
+    val transferOutTimeRDD = transferRDD.select(col("fromId"), col("createTime"))
+
+    val transferOutByMonthRDD = transferOutTimeRDD
+      .withColumn("year_month", date_format((col("createTime") / 1000).cast("timestamp"), "yyyy-MM"))
+      .groupBy("fromId", "year_month")
+      .count()
+
+    val transferOutPivotRDD = transferOutByMonthRDD.groupBy("fromId")
+      .pivot("year_month")
+      .agg(first("count"))
+      .na.fill(0)
+      .withColumnRenamed("fromId", "account_id")
+      
     val withdrawInRDD = withdrawRDD.select($"toId", $"fromId", $"amount".cast("double"))
 
     val combinedRDD = transferRDD.select($"fromId", $"toId", $"amount".cast("double"))
@@ -204,6 +242,56 @@ object FactorGenerationStage extends DatagenStage {
       .na.fill(0)
       .withColumnRenamed("fromId", "account_id")
 
+    val transferInAmountRDD = transferRDD.select($"toId", $"amount".cast("double"))
+
+    val transferInbucketRDD = transferInAmountRDD.withColumn("bucket", 
+      when(col("amount") <= buckets(0), buckets(0))
+        .when(col("amount") <= buckets(1), buckets(1))
+        .when(col("amount") <= buckets(2), buckets(2))
+        .when(col("amount") <= buckets(3), buckets(3))
+        .when(col("amount") <= buckets(4), buckets(4))
+        .when(col("amount") <= buckets(5), buckets(5))
+        .when(col("amount") <= buckets(6), buckets(6))
+        .when(col("amount") <= buckets(7), buckets(7))
+        .when(col("amount") <= buckets(8), buckets(8))
+        .when(col("amount") <= buckets(9), buckets(9))
+        .when(col("amount") <= buckets(10), buckets(10))
+        .when(col("amount") <= buckets(11), buckets(11))
+        .when(col("amount") <= buckets(12), buckets(12))
+        .otherwise(buckets(13))
+    )
+
+    val transferInBucketCountsRDD = transferInbucketRDD.groupBy("toId")
+      .pivot("bucket", buckets.map(_.toString))
+      .count()
+      .na.fill(0)
+      .withColumnRenamed("toId", "account_id")
+
+    val transferOutAmountRDD = transferRDD.select($"fromId", $"amount".cast("double"))
+
+    val transferOutbucketRDD = transferOutAmountRDD.withColumn("bucket", 
+      when(col("amount") <= buckets(0), buckets(0))
+        .when(col("amount") <= buckets(1), buckets(1))
+        .when(col("amount") <= buckets(2), buckets(2))
+        .when(col("amount") <= buckets(3), buckets(3))
+        .when(col("amount") <= buckets(4), buckets(4))
+        .when(col("amount") <= buckets(5), buckets(5))
+        .when(col("amount") <= buckets(6), buckets(6))
+        .when(col("amount") <= buckets(7), buckets(7))
+        .when(col("amount") <= buckets(8), buckets(8))
+        .when(col("amount") <= buckets(9), buckets(9))
+        .when(col("amount") <= buckets(10), buckets(10))
+        .when(col("amount") <= buckets(11), buckets(11))
+        .when(col("amount") <= buckets(12), buckets(12))
+        .otherwise(buckets(13))
+    )
+
+    val transferOutBucketCountsRDD = transferOutbucketRDD.groupBy("fromId")
+      .pivot("bucket", buckets.map(_.toString))
+      .count()
+      .na.fill(0)
+      .withColumnRenamed("fromId", "account_id")
+
     val loanRDD = spark.read
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .option("header", "true")
@@ -267,12 +355,40 @@ object FactorGenerationStage extends DatagenStage {
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .save("./out/factor_table/month")
 
+    transferInPivotRDD
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/transfer_in_month")
+
+    transferOutPivotRDD
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/transfer_out_month")
+
     bucketCountsRDD
       .write
       .option("header", "true")
       .option("delimiter", "|")
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .save("./out/factor_table/amount_bucket")
+
+    transferOutBucketCountsRDD
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/transfer_out_bucket")
+
+    transferInBucketCountsRDD
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/transfer_in_bucket")
 
     transferOutListRDD
       .coalesce(1)
@@ -281,5 +397,13 @@ object FactorGenerationStage extends DatagenStage {
       .option("delimiter", "|")
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .save("./out/factor_table/account_transfer_out_list")
+
+    transferInListRDD
+      .coalesce(1)
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/account_transfer_in_list")
   }
 }
