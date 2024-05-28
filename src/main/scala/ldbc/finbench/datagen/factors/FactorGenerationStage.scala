@@ -18,6 +18,7 @@ import org.apache.spark.sql.functions.array_join
 import org.apache.spark.sql.functions.concat
 import org.apache.spark.sql.functions.sum
 import org.apache.spark.sql.functions.format_string
+import org.apache.spark.sql.functions.collect_list
 import org.apache.spark.sql.types.{ArrayType, StringType}
 import org.graphframes.GraphFrame
 import org.slf4j.{Logger, LoggerFactory}
@@ -106,6 +107,20 @@ object FactorGenerationStage extends DatagenStage {
       .option("delimiter", "|")
       .load("./out/raw/withdraw/*.csv")
 
+    val transferOutRDD = transferRDD.select($"fromId", $"toId")
+
+    val transferOutLRDD = transferOutRDD.groupBy($"fromId")
+      .agg(F.collect_list($"toId").alias("transfer_out_list"))
+      .select($"fromId".alias("account_id"), $"transfer_out_list")
+      .sort($"account_id")
+
+    val transferOutListRDD = transferOutLRDD.withColumn(
+      "transfer_out_list",
+      F.concat(lit("["), F.concat_ws(",", $"transfer_out_list"), lit("]"))
+    )
+
+    val withdrawInRDD = withdrawRDD.select($"toId", $"fromId", $"amount".cast("double"))
+
     val combinedRDD = transferRDD.select($"fromId", $"toId", $"amount".cast("double"))
       .union(withdrawRDD.select($"fromId", $"toId", $"amount".cast("double")))
 
@@ -126,12 +141,31 @@ object FactorGenerationStage extends DatagenStage {
     val maxAmountRDD = combinedRDD.groupBy($"fromId", $"toId")
       .agg(max($"amount").alias("maxAmount"))
 
+    val withdrawInAmountRDD = withdrawInRDD.groupBy($"toId", $"fromId")
+      .agg(max($"amount").alias("maxAmount"))
+
     val accountItemsRDD = maxAmountRDD.groupBy($"fromId")
       .agg(F.collect_list(F.array($"toId", $"maxAmount")).alias("items"))
       .select($"fromId".alias("account_id"), $"items")
       .sort($"account_id")
+    
+    val withdrawInItemsRDD = withdrawInAmountRDD.groupBy($"toId")
+      .agg(F.collect_list(F.array($"fromId", $"maxAmount")).alias("items"))
+      .select($"toId".alias("account_id"), $"items")
+      .sort($"account_id")
 
     val transformedAccountItemsRDD = accountItemsRDD.withColumn(
+      "items",
+      F.expr("transform(items, array -> concat('[', concat_ws(',', array), ']'))")
+    ).withColumn(
+      "items",
+      F.concat_ws(",", $"items")
+    ).withColumn(
+      "items",
+      F.concat(lit("["), $"items", lit("]"))
+    )
+
+    val transformedWithdrawInItemsRDD = withdrawInItemsRDD.withColumn(
       "items",
       F.expr("transform(items, array -> concat('[', concat_ws(',', array), ']'))")
     ).withColumn(
@@ -186,6 +220,7 @@ object FactorGenerationStage extends DatagenStage {
       .groupBy("id")
       .agg(coalesce(collect_set("accountId"), array()).alias("account_list"))  
       .select(col("id").alias("loan_id"), concat(lit("["), array_join(col("account_list"), ","), lit("]")).alias("account_list"))  
+      .orderBy("loan_id")
 
     val transactionsSumRDD = transferRDD.select(col("toId"), col("amount").cast("double"))
       .union(withdrawRDD.select(col("toId"), col("amount").cast("double")))
@@ -217,6 +252,13 @@ object FactorGenerationStage extends DatagenStage {
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .save("./out/factor_table/account_items")
 
+    transformedWithdrawInItemsRDD
+      .coalesce(1)
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/account_withdraw_in_items")
     
     pivotRDD
       .write
@@ -232,6 +274,12 @@ object FactorGenerationStage extends DatagenStage {
       .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
       .save("./out/factor_table/amount_bucket")
 
-    
+    transferOutListRDD
+      .coalesce(1)
+      .write
+      .option("header", "true")
+      .option("delimiter", "|")
+      .format("org.apache.spark.sql.execution.datasources.csv.CSVFileFormat")
+      .save("./out/factor_table/account_transfer_out_list")
   }
 }

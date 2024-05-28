@@ -125,16 +125,22 @@ def get_next_neighbor_list(neighbors_df, account_account_df, account_amount_df, 
 
 
 def get_next_sum_table(neighbors_df, basic_sum_df):
-    result_data = []
-    for index, row in neighbors_df.iterrows():
-        loan_id = row['loan_id']
-        account_list = row['account_list']
-        add_frame = basic_sum_df.loc[basic_sum_df.index.isin(account_list)]
-        add_frame = add_frame.rename_axis('loan_id')
-        sum_result = add_frame.sum(axis=0).astype(int)
-        sum_result['loan_id'] = loan_id
-        result_data.append(sum_result.to_dict())
-    return pd.DataFrame(result_data)
+    # result_data = []
+    # for index, row in neighbors_df.iterrows():
+    #     loan_id = row['loan_id']
+    #     account_list = row['account_list']
+    #     add_frame = basic_sum_df.loc[basic_sum_df.index.isin(account_list)]
+    #     add_frame = add_frame.rename_axis('loan_id')
+    #     sum_result = add_frame.sum(axis=0).astype(int)
+    #     sum_result['loan_id'] = loan_id
+    #     result_data.append(sum_result.to_dict())
+    # return pd.DataFrame(result_data)
+    
+    neighbors_exploded = neighbors_df.explode('account_list')
+    merged_df = neighbors_exploded.merge(basic_sum_df, left_on='account_list', right_index=True, how='left')
+    result_df = merged_df.groupby('loan_id').sum().astype(int)
+
+    return result_df
 
 
 def handleLoanParam(loan):
@@ -173,20 +179,20 @@ def main():
     
     steps = 3
     current_step = 0
-    loan_neighbors_df = loan_account_df
+    loan_neighbors_df = loan_account_df.sort_values(by='loan_id')
     loan_array = loan_neighbors_df['loan_id'].to_numpy()
     next_time_bucket = None
 
     while current_step < steps:
 
         next_loan_amount_bucket = get_next_sum_table(loan_neighbors_df, amount_bucket_df)
-        next_loan_amount_bucket.set_index('loan_id', inplace=True)
+        # next_loan_amount_bucket.set_index('loan_id', inplace=True)
         temp_loan_array = next_loan_amount_bucket.to_numpy().sum(axis=1)
         loan_array = np.column_stack((loan_array, temp_loan_array))
 
         if current_step == steps - 1:
             next_time_bucket = get_next_sum_table(loan_neighbors_df, time_bucket_df)
-            next_time_bucket.set_index('loan_id', inplace=True)
+            # next_time_bucket.set_index('loan_id', inplace=True)
 
             # print(neighbors_df)
             # print(next_amount_bucket)
