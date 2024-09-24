@@ -252,18 +252,24 @@ def get_filter_neighbor_list(neighbors_df, amount_bucket_df):
     return next_neighbors_df
 
 
+def process_batch(batch, basic_sum_df, first_column_name, second_column_name):
+    neighbors_exploded = batch.explode(second_column_name)
+    merged_df = neighbors_exploded.merge(
+        basic_sum_df, left_on=second_column_name, right_index=True, how='left'
+    ).drop(columns=[second_column_name])
+    return merged_df.groupby(first_column_name).sum()
+
 def get_next_sum_table(neighbors_df, basic_sum_df, batch_size=BATCH_SIZE):
     first_column_name = neighbors_df.columns[0]
     second_column_name = neighbors_df.columns[1]
+
+    batches = [neighbors_df.iloc[start:start + batch_size] for start in range(0, len(neighbors_df), batch_size)]
     
     result_list = []
-
-    for start in range(0, len(neighbors_df), batch_size):
-        end = start + batch_size
-        batch = neighbors_df.iloc[start:end]
-        neighbors_exploded = batch.explode(second_column_name)
-        merged_df = neighbors_exploded.merge(basic_sum_df, left_on=second_column_name, right_index=True, how='left').drop(columns=[second_column_name])
-        result_list.append(merged_df.groupby(first_column_name).sum().astype(int))
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = [executor.submit(process_batch, batch, basic_sum_df, first_column_name, second_column_name) for batch in batches]
+        for future in futures:
+            result_list.append(future.result())
 
     result_df = pd.concat(result_list).groupby(first_column_name).sum().astype(int)
 
@@ -654,7 +660,7 @@ def process_withdraw_query():
 
 def main():
     queries = [3, 1, 8, 7, 10, 11, 2, 5, 6]
-    # queries = [8]
+    # queries = [3]
 
     multiprocessing.set_start_method('spawn')
     processes = []
