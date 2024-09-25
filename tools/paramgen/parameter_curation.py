@@ -266,7 +266,8 @@ def get_next_sum_table(neighbors_df, basic_sum_df, batch_size=BATCH_SIZE):
     batches = [neighbors_df.iloc[start:start + batch_size] for start in range(0, len(neighbors_df), batch_size)]
     
     result_list = []
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    query_parallelism = max(1, multiprocessing.cpu_count() // 4)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=query_parallelism) as executor:
         futures = [executor.submit(process_batch, batch, basic_sum_df, first_column_name, second_column_name) for batch in batches]
         for future in futures:
             result_list.append(future.result())
